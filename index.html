@@ -76,7 +76,8 @@ footer{max-width:1100px;margin:0 auto;padding:0 24px 28px;font-size:11px;color:#
       <p class="hint">
         L'animation démarre dès que les deux photos sont chargées : la transformation s'étale
         sur 6 secondes par étape, en va-et-vient. « Enregistrer la vidéo » capture un
-        aller-retour complet (12 secondes) et propose le téléchargement.
+        aller-retour complet (12 secondes) et propose le téléchargement en MP4,
+        ou en WebM si le navigateur ne permet pas l'enregistrement en MP4.
       </p>
       <p class="status" id="recStatus"></p>
     </div>
@@ -594,7 +595,7 @@ btnPng.addEventListener("click", function(){
 var recorder = null, chunks = [], recording = false, recTimer = null;
 function setRecStatus(msg){ recStatus.textContent = msg; }
 function pickMime(){
-  var c = ["video/webm;codecs=vp9","video/webm;codecs=vp8","video/webm","video/mp4"];
+  var c = ["video/mp4;codecs=avc1.42E01E","video/mp4;codecs=avc1","video/mp4","video/webm;codecs=vp9","video/webm;codecs=vp8","video/webm"];
   for(var i=0;i<c.length;i++){
     try{ if(MediaRecorder.isTypeSupported(c[i])) return c[i]; }catch(err){}
   }
@@ -613,6 +614,7 @@ btnRec.addEventListener("click", function(){
     return;
   }
   var mime = pickMime();
+  var recFmt = mime.indexOf("mp4") >= 0 ? "MP4" : "WebM";
   stopPlay();
   setT(0); dir = 1;
   renderMorph();
@@ -648,7 +650,7 @@ btnRec.addEventListener("click", function(){
   recording = true;
   btnRec.textContent = "Arrêter l'enregistrement";
   btnRec.classList.add("active");
-  setRecStatus("Enregistrement en cours : un aller-retour complet (12 secondes), puis arrêt automatique.");
+  setRecStatus("Enregistrement en cours (" + recFmt + ") : un aller-retour complet (12 secondes), puis arrêt automatique.");
   startPlay();
   recTimer = setTimeout(stopRecording, 12600);
 });
