@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Morphing des visages — Anniversaire Clio</title>
+<style>
+:root{--bg:#09090b;--card:#18181b;--border:#27272a;--txt:#f4f4f5;--mut:#a1a1aa;--amber:#fbbf24}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{border-bottom:1px solid var(--border);padding:20px 28px}
+header h1{margin:0;font-size:22px;font-weight:600}
+header h1 span{color:var(--amber)}
+header p{margin:4px 0 0;font-size:12px;color:var(--mut)}
+main{display:flex;gap:24px;padding:24px;max-width:1100px;margin:0 auto;flex-wrap:wrap}
+.stage{flex:1;min-width:300px;display:flex;flex-direction:column;gap:12px}
+.outframe{border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+#out{width:100%;height:auto;display:block}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+.toplabel{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-bottom:6px}
+.toplabel output{color:var(--txt)}
+.controls input[type=range]{width:100%;accent-color:var(--amber);margin-bottom:12px}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+button{background:transparent;border:1px solid #3f3f46;color:var(--txt);border-radius:10px;padding:7px 12px;font-size:13px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--amber)}
+button:disabled{opacity:.4;cursor:default}
+button.primary{background:var(--amber);color:#18181b;border-color:var(--amber);font-weight:600}
+button.rec{border-color:#ef4444;color:#fca5a5}
+button.rec.active{background:#ef4444;color:#fff}
+.hint{font-size:12px;color:var(--mut);line-height:1.6;margin:12px 0 0}
+.status{font-size:12px;color:var(--amber);margin:8px 0 0;min-height:16px}
+aside{width:320px;min-width:280px;flex:0 0 auto}
+aside h2{font-size:14px;color:var(--amber);margin:0 0 12px}
+aside ol{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+aside li{display:flex;gap:8px;font-size:12px;color:#d4d4d8;align-items:flex-start}
+aside li .n{flex:0 0 20px;height:20px;border-radius:50%;background:var(--amber);color:#18181b;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+aside p.note{font-size:12px;color:var(--mut);line-height:1.6;margin:12px 0 0}
+.editors{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;max-width:1100px;margin:0 auto;padding:0 24px 24px}
+.editor h3{font-size:14px;margin:0;font-weight:500;flex:1}
+.edhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.filebtn{border:1px solid #3f3f46;border-radius:10px;padding:6px 10px;font-size:12px;cursor:pointer;display:inline-block}
+.filebtn:hover{border-color:var(--amber)}
+.edbox{position:relative;border-radius:10px;overflow:hidden;touch-action:none}
+.edbox canvas{width:100%;height:auto;display:block;cursor:crosshair}
+.emptymsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;color:var(--mut);padding:16px;margin:0}
+.edhint{font-size:11px;color:var(--mut);line-height:1.6;margin:8px 0 0}
+footer{max-width:1100px;margin:0 auto;padding:0 24px 28px;font-size:11px;color:#52525b}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal.hidden{display:none}
+.modalbox{background:var(--card);border:1px solid #3f3f46;border-radius:16px;max-width:760px;width:100%;padding:16px;max-height:92vh;overflow:auto}
+.modalbox h3{font-size:14px;color:var(--amber);margin:0 0 12px}
+.modalbox img,.modalbox video{width:100%;border-radius:8px;display:block}
+.modalrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.modalrow a.dl{background:var(--amber);color:#18181b;font-weight:600;border-radius:10px;padding:8px 14px;font-size:13px;text-decoration:none}
+.fallback{font-size:11px;color:var(--mut);flex:1;min-width:200px;margin:0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Morphing des visages — <span>Anniversaire Clio</span></h1>
+  <p>Transformation continue entre deux photos, calculée entièrement dans votre navigateur. Aucune image n'est envoyée sur un serveur.</p>
+</header>
+
+<main>
+  <section class="stage">
+    <div class="outframe"><canvas id="out" width="1000" height="1000"></canvas></div>
+    <div class="controls card">
+      <div class="toplabel"><span>Paramètre du morphing — 0&nbsp;% photo 1 → 100&nbsp;% photo 2</span><output id="tval" for="tslider">50&nbsp;%</output></div>
+      <input type="range" id="tslider" min="0" max="1" step="0.01" value="0.5" disabled>
+      <div class="btnrow">
+        <button id="btnPlay" disabled>Animer la transformation</button>
+        <button id="btnHalf" disabled>Morphing à 50&nbsp;%</button>
+        <button id="btnPng" class="primary" disabled>Exporter en PNG</button>
+        <button id="btnRec" class="rec" disabled>Enregistrer la vidéo</button>
+      </div>
+      <p class="hint">
+        L'animation démarre dès que les deux photos sont chargées : la transformation s'étale
+        sur 6 secondes par étape, en va-et-vient. « Enregistrer la vidéo » capture un
+        aller-retour complet (12 secondes) et propose le téléchargement.
+      </p>
+      <p class="status" id="recStatus"></p>
+    </div>
+  </section>
+
+  <aside class="card">
+    <h2>Les neuf repères</h2>
+    <ol id="legendList"></ol>
+    <p class="note">
+      Sur chaque photo, vérifiez les neuf repères : leur précision détermine la qualité du
+      morphing. La photo est d'abord cadrée sur le visage ; glissez le fond ou utilisez la
+      molette pour corriger le cadrage.
+    </p>
+  </aside>
+</main>
+
+<section class="editors">
+  <div class="editor card" id="ed0">
+    <div class="edhead">
+      <h3>Photo 1</h3>
+      <label class="filebtn"><span id="lbl0">Choisir la photo</span><input id="file0" type="file" accept="image/*" hidden></label>
+      <button id="center0" hidden>Centrer sur le visage</button>
+      <button id="reset0" hidden>Réinitialiser les points</button>
+    </div>
+    <div class="edbox" id="box0"><canvas width="1000" height="1000"></canvas>
+      <p class="emptymsg">Chargez la première photo : elle sera cadrée sur le visage et les repères s'afficheront.</p>
+    </div>
+    <p class="edhint">Glissez un numéro pour l'ajuster ; glissez ailleurs pour recadrer la photo ; molette pour zoomer.</p>
+  </div>
+  <div class="editor card" id="ed1">
+    <div class="edhead">
+      <h3>Photo 2</h3>
+      <label class="filebtn"><span id="lbl1">Choisir la photo</span><input id="file1" type="file" accept="image/*" hidden></label>
+      <button id="center1" hidden>Centrer sur le visage</button>
+      <button id="reset1" hidden>Réinitialiser les points</button>
+    </div>
+    <div class="edbox" id="box1"><canvas width="1000" height="1000"></canvas>
+      <p class="emptymsg">Chargez la deuxième photo : elle sera cadrée sur le visage et les repères s'afficheront.</p>
+    </div>
+    <p class="edhint">Glissez un numéro pour l'ajuster ; glissez ailleurs pour recadrer la photo ; molette pour zoomer.</p>
+  </div>
+</section>
+
+<footer>
+  Site statique publié via GitHub Pages — les photos sont chargées localement et ne quittent jamais votre appareil.
+</footer>
+
+<div id="modal" class="modal hidden">
+  <div class="modalbox">
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+    <div class="modalrow">
+      <a id="modalDl" class="dl" download>Télécharger</a>
+      <button id="modalClose">Fermer</button>
+      <p class="fallback">Si le téléchargement ne démarre pas, faites un clic droit sur l'aperçu et choisissez « Enregistrer… ».</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var W = 1000;
+var PTS_META = [
+  "Œil gauche (à gauche sur la photo)",
+  "Œil droit (à droite sur la photo)",
+  "Bout du nez",
+  "Coin gauche de la bouche",
+  "Coin droit de la bouche",
+  "Bas du menton",
+  "Haut du front (racine des cheveux)",
+  "Haut de l'oreille gauche",
+  "Haut de l'oreille droite"
+];
+// Repères initiaux génériques (visage supposé à peu près centré).
+var DEFAULTS = [
+  {x:0.42,y:0.45},{x:0.58,y:0.45},{x:0.50,y:0.55},
+  {x:0.44,y:0.63},{x:0.56,y:0.63},{x:0.50,y:0.72},
+  {x:0.50,y:0.30},{x:0.32,y:0.45},{x:0.68,y:0.45}
+];
+var CORNERS = [{x:0,y:0},{x:W,y:0},{x:W,y:W},{x:0,y:W}];
+
+function clamp(v,lo,hi){ return Math.min(Math.max(v,lo),hi); }
+
+// Recadrage : zoome sur le visage repéré (largeur oreilles, hauteur front-menton).
+function layoutFromFractions(defs,natW,natH){
+  var base = Math.max(W/natW, W/natH);
+  var q = defs.map(function(d){ return {x:d.x*natW, y:d.y*natH}; });
+  var faceW = Math.abs(q[7].x - q[8].x);
+  var faceH = Math.abs(q[5].y - q[6].y);
+  var s = Math.min(
+    faceW > 1e-6 ? (0.9*W)/faceW : Infinity,
+    faceH > 1e-6 ? (0.9*W)/faceH : Infinity,
+    base*10
+  );
+  if(!isFinite(s)) s = base;
+  s = Math.max(s, base*0.03);
+  var cxq = (q[0].x+q[1].x+q[2].x+q[5].x+q[6].x)/5;
+  var cyq = (q[0].y+q[1].y+q[2].y+q[5].y+q[6].y)/5;
+  var ox = W/2 - cxq*s;
+  var oy = W/2 - cyq*s;
+  var drawW = natW*s, drawH = natH*s;
+  ox = clamp(ox, Math.min(0, W-drawW), Math.max(0, W-drawW));
+  oy = clamp(oy, Math.min(0, W-drawH), Math.max(0, W-drawH));
+  var pts = q.map(function(p){ return {x:p.x*s+ox, y:p.y*s+oy}; });
+  return {s:s, ox:ox, oy:oy, pts:pts};
+}
+
+// --- Delaunay (Bowyer-Watson) ---
+function circumcircle(a,b,c){
+  var d = 2*(a.x*(b.y-c.y) + b.x*(c.y-a.y) + c.x*(a.y-b.y));
+  if(Math.abs(d) < 1e-12) return null;
+  var a2 = a.x*a.x+a.y*a.y, b2 = b.x*b.x+b.y*b.y, c2 = c.x*c.x+c.y*c.y;
+  var ux = (a2*(b.y-c.y) + b2*(c.y-a.y) + c2*(a.y-b.y))/d;
+  var uy = (a2*(c.x-b.x) + b2*(a.x-c.x) + c2*(b.x-a.x))/d;
+  return {ux:ux, uy:uy, r:Math.hypot(a.x-ux, a.y-uy)};
+}
+function delaunay(points){
+  var n = points.length;
+  var xs = points.map(function(p){return p.x;});
+  var ys = points.map(function(p){return p.y;});
+  var cx = (Math.min.apply(null,xs)+Math.max.apply(null,xs))/2;
+  var cy = (Math.min.apply(null,ys)+Math.max.apply(null,ys))/2;
+  var dmax = Math.max(Math.max.apply(null,xs)-Math.min.apply(null,xs), Math.max.apply(null,ys)-Math.min.apply(null,ys))*20 + 100;
+  var pts = points.concat([
+    {x:cx-dmax,y:cy-dmax},{x:cx+dmax,y:cy-dmax},{x:cx,y:cy+dmax}
+  ]);
+  var tris = [[n,n+1,n+2]];
+  var i, k, t, cc, inside, edges, keep, count, key, e;
+  for(i=0;i<n;i++){
+    var p = pts[i];
+    edges = []; keep = [];
+    for(k=0;k<tris.length;k++){
+      t = tris[k];
+      cc = circumcircle(pts[t[0]],pts[t[1]],pts[t[2]]);
+      inside = cc && Math.hypot(p.x-cc.ux, p.y-cc.uy) <= cc.r*(1+1e-9);
+      if(inside){ edges.push([t[0],t[1]],[t[1],t[2]],[t[2],t[0]]); }
+      else keep.push(t);
+    }
+    tris = keep;
+    count = {};
+    for(k=0;k<edges.length;k++){
+      e = edges[k];
+      key = Math.min(e[0],e[1]) + "-" + Math.max(e[0],e[1]);
+      if(count[key]) delete count[key];
+      else count[key] = e;
+    }
+    for(key in count){ e = count[key]; tris.push([e[0],e[1],i]); }
+  }
+  return tris.filter(function(t){ return t[0]<n && t[1]<n && t[2]<n; });
+}
+function triAffine(s,t){
+  var p1=s[0],p2=s[1],p3=s[2],q1=t[0],q2=t[1],q3=t[2];
+  var den = (p2.x-p1.x)*(p3.y-p1.y) - (p3.x-p1.x)*(p2.y-p1.y);
+  if(Math.abs(den) < 1e-9) return null;
+  var a = ((q2.x-q1.x)*(p3.y-p1.y) - (q3.x-q1.x)*(p2.y-p1.y))/den;
+  var c = ((q3.x-q1.x)*(p2.x-p1.x) - (q2.x-q1.x)*(p3.x-p1.x))/den;
+  var b = ((q2.y-q1.y)*(p3.y-p1.y) - (q3.y-q1.y)*(p2.y-p1.y))/den;
+  var d = ((q3.y-q1.y)*(p2.x-p1.x) - (q2.y-q1.y)*(p3.x-p1.x))/den;
+  return [a,b,c,d, q1.x - a*p1.x - c*p1.y, q1.y - b*p1.x - d*p1.y];
+}
+function warpInto(dst, fittedCanvas, src, tgt, tris){
+  dst.setTransform(1,0,0,1,0,0);
+  dst.clearRect(0,0,W,W);
+  var i, j, m, s, tp, gx, gy, te;
+  for(i=0;i<tris.length;i++){
+    s = [src[tris[i][0]], src[tris[i][1]], src[tris[i][2]]];
+    tp = [tgt[tris[i][0]], tgt[tris[i][1]], tgt[tris[i][2]]];
+    gx = (tp[0].x+tp[1].x+tp[2].x)/3;
+    gy = (tp[0].y+tp[1].y+tp[2].y)/3;
+    te = tp.map(function(p){ return {x:gx+(p.x-gx)*1.004, y:gy+(p.y-gy)*1.004}; });
+    m = triAffine(s, te);
+    if(!m) continue;
+    dst.save();
+    dst.beginPath();
+    dst.moveTo(te[0].x, te[0].y);
+    dst.lineTo(te[1].x, te[1].y);
+    dst.lineTo(te[2].x, te[2].y);
+    dst.closePath();
+    dst.clip();
+    dst.setTransform(m[0],m[1],m[2],m[3],m[4],m[5]);
+    dst.drawImage(fittedCanvas, 0, 0);
+    dst.restore();
+  }
+}
+function makeFitted(slot){
+  var c = document.createElement("canvas");
+  c.width = W; c.height = W;
+  var ctx = c.getContext("2d");
+  ctx.drawImage(slot.img, slot.ox, slot.oy, slot.img.naturalWidth*slot.s, slot.img.naturalHeight*slot.s);
+  return c;
+}
+
+// --- État ---
+var slots = [null, null];
+var fitted = [null, null];
+var tris = null;
+var t = 0.5, dir = 1, playing = false;
+
+var out = document.getElementById("out");
+var outCtx = out.getContext("2d");
+var tslider = document.getElementById("tslider");
+var tval = document.getElementById("tval");
+var btnPlay = document.getElementById("btnPlay");
+var btnHalf = document.getElementById("btnHalf");
+var btnPng = document.getElementById("btnPng");
+var btnRec = document.getElementById("btnRec");
+var recStatus = document.getElementById("recStatus");
+
+var editors = [
+  {box:document.getElementById("box0"), cv:document.querySelector("#box0 canvas"), file:document.getElementById("file0"), lbl:document.getElementById("lbl0"), btnCenter:document.getElementById("center0"), btnReset:document.getElementById("reset0"), empty:document.querySelector("#box0 .emptymsg")},
+  {box:document.getElementById("box1"), cv:document.querySelector("#box1 canvas"), file:document.getElementById("file1"), lbl:document.getElementById("lbl1"), btnCenter:document.getElementById("center1"), btnReset:document.getElementById("reset1"), empty:document.querySelector("#box1 .emptymsg")}
+];
+
+function ready(){ return !!(slots[0] && slots[1]); }
+
+// Légende
+(function(){
+  var ol = document.getElementById("legendList");
+  PTS_META.forEach(function(m,i){
+    var li = document.createElement("li");
+    var n = document.createElement("span"); n.className="n"; n.textContent = String(i+1);
+    var sp = document.createElement("span"); sp.textContent = m;
+    li.appendChild(n); li.appendChild(sp); ol.appendChild(li);
+  });
+})();
+
+function setT(v){
+  t = v;
+  tslider.value = String(v);
+  tval.textContent = Math.round(v*100) + " %";
+}
+
+function updateUI(){
+  var r = ready();
+  tslider.disabled = !r;
+  btnPlay.disabled = !r;
+  btnHalf.disabled = !r;
+  btnPng.disabled = !r;
+  btnRec.disabled = !r;
+  for(var i=0;i<2;i++){
+    var loaded = !!slots[i];
+    editors[i].btnCenter.hidden = !loaded;
+    editors[i].btnReset.hidden = !loaded;
+    editors[i].empty.style.display = loaded ? "none" : "flex";
+    editors[i].lbl.textContent = loaded ? "Remplacer la photo" : "Choisir la photo";
+  }
+}
+
+function computeTris(){
+  if(!ready()){ tris = null; return; }
+  var avg = slots[0].pts.map(function(p,k){
+    return {x:(p.x + slots[1].pts[k].x)/2, y:(p.y + slots[1].pts[k].y)/2};
+  });
+  tris = delaunay(avg.concat(CORNERS));
+}
+
+function renderEditor(i){
+  var ed = editors[i];
+  var ctx = ed.cv.getContext("2d");
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalAlpha = 1;
+  ctx.filter = "none";
+  ctx.fillStyle = "#18181b";
+  ctx.fillRect(0,0,W,W);
+  var s = slots[i];
+  if(!s) return;
+  if(fitted[i]) ctx.drawImage(fitted[i], 0, 0);
+  if(tris){
+    var all = s.pts.concat(CORNERS);
+    ctx.strokeStyle = "rgba(251,191,36,0.28)";
+    ctx.lineWidth = 1.5;
+    tris.forEach(function(tr){
+      ctx.beginPath();
+      ctx.moveTo(all[tr[0]].x, all[tr[0]].y);
+      ctx.lineTo(all[tr[1]].x, all[tr[1]].y);
+      ctx.lineTo(all[tr[2]].x, all[tr[2]].y);
+      ctx.closePath();
+      ctx.stroke();
+    });
+  }
+  s.pts.forEach(function(p,k){
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 15, 0, Math.PI*2);
+    ctx.fillStyle = "#fbbf24";
+    ctx.fill();
+    ctx.fillStyle = "#18181b";
+    ctx.font = "700 14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(k+1), p.x, p.y+0.5);
+  });
+}
+
+var offA = document.createElement("canvas"); offA.width=W; offA.height=W;
+var offB = document.createElement("canvas"); offB.width=W; offB.height=W;
+
+function renderMorph(){
+  outCtx.setTransform(1,0,0,1,0,0);
+  outCtx.globalAlpha = 1;
+  outCtx.globalCompositeOperation = "source-over";
+  outCtx.filter = "none";
+  outCtx.fillStyle = "#000";
+  outCtx.fillRect(0,0,W,W);
+  if(!ready() || !tris) return;
+  var lm = slots[0].pts.map(function(p,i){
+    return {x:p.x*(1-t) + slots[1].pts[i].x*t, y:p.y*(1-t) + slots[1].pts[i].y*t};
+  });
+  var morphed = lm.concat(CORNERS);
+  warpInto(offA.getContext("2d"), fitted[0], slots[0].pts.concat(CORNERS), morphed, tris);
+  warpInto(offB.getContext("2d"), fitted[1], slots[1].pts.concat(CORNERS), morphed, tris);
+  outCtx.drawImage(offA, 0, 0);
+  outCtx.globalAlpha = t;
+  outCtx.drawImage(offB, 0, 0);
+  outCtx.globalAlpha = 1;
+}
+
+function refreshAll(){
+  computeTris();
+  renderEditor(0);
+  renderEditor(1);
+  renderMorph();
+}
+
+// --- Chargement ---
+function loadSlot(i, file){
+  var url = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = function(){
+    slots[i] = {name:file.name, src:url, img:img,
+      s:0, ox:0, oy:0, pts:[]};
+    var lay = layoutFromFractions(DEFAULTS, img.naturalWidth, img.naturalHeight);
+    slots[i].s = lay.s; slots[i].ox = lay.ox; slots[i].oy = lay.oy; slots[i].pts = lay.pts;
+    fitted[i] = makeFitted(slots[i]);
+    updateUI();
+    refreshAll();
+    if(ready()){ setT(0); dir = 1; startPlay(); }
+  };
+  img.src = url;
+}
+
+// --- Interactions des éditeurs ---
+function posFromEvent(e, box){
+  var r = box.getBoundingClientRect();
+  return {x:(e.clientX-r.left)/r.width*W, y:(e.clientY-r.top)/r.height*W};
+}
+function panSlot(i, dx, dy){
+  var prev = slots[i]; if(!prev) return;
+  var drawW = prev.img.naturalWidth*prev.s, drawH = prev.img.naturalHeight*prev.s;
+  var ox = clamp(prev.ox+dx, Math.min(0, W-drawW), Math.max(0, W-drawW));
+  var oy = clamp(prev.oy+dy, Math.min(0, W-drawH), Math.max(0, W-drawH));
+  var rx = ox - prev.ox, ry = oy - prev.oy;
+  prev.pts = prev.pts.map(function(p){ return {x:p.x+rx, y:p.y+ry}; });
+  prev.ox = ox; prev.oy = oy;
+  fitted[i] = makeFitted(prev);
+}
+function zoomSlot(i, cx, cy, factor){
+  var prev = slots[i]; if(!prev) return;
+  var base = Math.max(W/prev.img.naturalWidth, W/prev.img.naturalHeight);
+  var s = clamp(prev.s*factor, base*0.02, base*20);
+  var qx = (cx - prev.ox)/prev.s, qy = (cy - prev.oy)/prev.s;
+  var ox = cx - qx*s, oy = cy - qy*s;
+  var drawW = prev.img.naturalWidth*s, drawH = prev.img.naturalHeight*s;
+  ox = clamp(ox, Math.min(0, W-drawW), Math.max(0, W-drawW));
+  oy = clamp(oy, Math.min(0, W-drawH), Math.max(0, W-drawH));
+  prev.pts = prev.pts.map(function(p){
+    return {x:((p.x - prev.ox)/prev.s)*s + ox, y:((p.y - prev.oy)/prev.s)*s + oy};
+  });
+  prev.s = s; prev.ox = ox; prev.oy = oy;
+  fitted[i] = makeFitted(prev);
+}
+function centerOnFace(i){
+  var prev = slots[i]; if(!prev) return;
+  var q = prev.pts.map(function(p){
+    return {x:(p.x - prev.ox)/prev.s, y:(p.y - prev.oy)/prev.s};
+  });
+  var faceW = Math.abs(q[7].x - q[8].x);
+  var faceH = Math.abs(q[5].y - q[6].y);
+  var base = Math.max(W/prev.img.naturalWidth, W/prev.img.naturalHeight);
+  var s = Math.min(
+    faceW > 1e-6 ? (0.9*W)/faceW : Infinity,
+    faceH > 1e-6 ? (0.9*W)/faceH : Infinity,
+    base*10
+  );
+  if(!isFinite(s)) s = prev.s;
+  s = Math.max(s, base*0.03);
+  var cxq = (q[0].x+q[1].x+q[2].x+q[5].x+q[6].x)/5;
+  var cyq = (q[0].y+q[1].y+q[2].y+q[5].y+q[6].y)/5;
+  var ox = W/2 - cxq*s, oy = W/2 - cyq*s;
+  var drawW = prev.img.naturalWidth*s, drawH = prev.img.naturalHeight*s;
+  ox = clamp(ox, Math.min(0, W-drawW), Math.max(0, W-drawW));
+  oy = clamp(oy, Math.min(0, W-drawH), Math.max(0, W-drawH));
+  prev.pts = q.map(function(p){ return {x:p.x*s+ox, y:p.y*s+oy}; });
+  prev.s = s; prev.ox = ox; prev.oy = oy;
+  fitted[i] = makeFitted(prev);
+}
+function resetPts(i){
+  var prev = slots[i]; if(!prev) return;
+  var lay = layoutFromFractions(DEFAULTS, prev.img.naturalWidth, prev.img.naturalHeight);
+  prev.s = lay.s; prev.ox = lay.ox; prev.oy = lay.oy; prev.pts = lay.pts;
+  fitted[i] = makeFitted(prev);
+}
+
+(function(){
+  for(var i=0;i<2;i++){
+    (function(idx){
+      var ed = editors[idx];
+      var drag = null;
+      ed.box.addEventListener("pointerdown", function(e){
+        var s = slots[idx]; if(!s) return;
+        var p = posFromEvent(e, ed.box);
+        var best = -1, bd = 45;
+        s.pts.forEach(function(q,k){
+          var d = Math.hypot(q.x-p.x, q.y-p.y);
+          if(d < bd){ bd = d; best = k; }
+        });
+        if(best >= 0) drag = {kind:"pt", idx:best};
+        else drag = {kind:"pan", lastX:p.x, lastY:p.y};
+        ed.box.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+      ed.box.addEventListener("pointermove", function(e){
+        var s = slots[idx];
+        if(!drag || !s) return;
+        var p = posFromEvent(e, ed.box);
+        if(drag.kind === "pt"){
+          s.pts[drag.idx] = {x:clamp(p.x,0,W), y:clamp(p.y,0,W)};
+          refreshAll();
+        } else {
+          panSlot(idx, p.x - drag.lastX, p.y - drag.lastY);
+          drag.lastX = p.x; drag.lastY = p.y;
+          refreshAll();
+        }
+      });
+      var end = function(){ drag = null; };
+      ed.box.addEventListener("pointerup", end);
+      ed.box.addEventListener("pointercancel", end);
+      ed.box.addEventListener("wheel", function(e){
+        var s = slots[idx]; if(!s) return;
+        e.preventDefault();
+        var p = posFromEvent(e, ed.box);
+        zoomSlot(idx, p.x, p.y, e.deltaY < 0 ? 1.1 : 0.9);
+        refreshAll();
+      }, {passive:false});
+      ed.file.addEventListener("change", function(e){
+        var f = e.target.files && e.target.files[0];
+        if(f) loadSlot(idx, f);
+        e.target.value = "";
+      });
+      ed.btnCenter.addEventListener("click", function(){ centerOnFace(idx); refreshAll(); });
+      ed.btnReset.addEventListener("click", function(){ resetPts(idx); refreshAll(); });
+    })(i);
+  }
+})();
+
+// --- Animation (6 secondes par étape, en va-et-vient) ---
+var raf = 0, last = 0;
+function tick(now){
+  var dt = (now - last)/1000;
+  last = now;
+  var v = t + (dir*dt)/6;
+  if(v >= 1){ v = 1; dir = -1; }
+  if(v <= 0){ v = 0; dir = 1; }
+  setT(v);
+  renderMorph();
+  raf = requestAnimationFrame(tick);
+}
+function startPlay(){
+  if(playing) return;
+  playing = true;
+  last = performance.now();
+  raf = requestAnimationFrame(tick);
+  btnPlay.textContent = "Arrêter l'animation";
+}
+function stopPlay(){
+  playing = false;
+  cancelAnimationFrame(raf);
+  btnPlay.textContent = "Animer la transformation";
+}
+btnPlay.addEventListener("click", function(){
+  if(playing) stopPlay(); else startPlay();
+});
+btnHalf.addEventListener("click", function(){ stopPlay(); setT(0.5); renderMorph(); });
+tslider.addEventListener("input", function(){ stopPlay(); setT(parseFloat(tslider.value)); renderMorph(); });
+
+// --- Modal ---
+var modal = document.getElementById("modal");
+var modalTitle = document.getElementById("modalTitle");
+var modalBody = document.getElementById("modalBody");
+var modalDl = document.getElementById("modalDl");
+var modalClose = document.getElementById("modalClose");
+function openModal(){ modal.classList.remove("hidden"); }
+function closeModal(){
+  modal.classList.add("hidden");
+  modalBody.innerHTML = "";
+}
+modalClose.addEventListener("click", closeModal);
+modal.addEventListener("click", function(e){ if(e.target === modal) closeModal(); });
+
+btnPng.addEventListener("click", function(){
+  if(!ready()) return;
+  var url = out.toDataURL("image/png");
+  modalTitle.textContent = "Aperçu de l'export — morphing-clio.png";
+  modalBody.innerHTML = "";
+  var img = document.createElement("img");
+  img.src = url;
+  modalBody.appendChild(img);
+  modalDl.href = url;
+  modalDl.download = "morphing-clio.png";
+  openModal();
+});
+
+// --- Enregistrement vidéo ---
+var recorder = null, chunks = [], recording = false, recTimer = null;
+function setRecStatus(msg){ recStatus.textContent = msg; }
+function pickMime(){
+  var c = ["video/webm;codecs=vp9","video/webm;codecs=vp8","video/webm","video/mp4"];
+  for(var i=0;i<c.length;i++){
+    try{ if(MediaRecorder.isTypeSupported(c[i])) return c[i]; }catch(err){}
+  }
+  return "";
+}
+function stopRecording(){
+  if(recTimer){ clearTimeout(recTimer); recTimer = null; }
+  if(recorder && recorder.state !== "inactive") recorder.stop();
+  stopPlay();
+}
+btnRec.addEventListener("click", function(){
+  if(recording){ stopRecording(); return; }
+  if(!ready()) return;
+  if(!window.MediaRecorder || !out.captureStream){
+    setRecStatus("Votre navigateur ne permet pas l'enregistrement vidéo intégré. Utilisez l'enregistrement d'écran (sur Mac : ⌘⇧5 ou QuickTime).");
+    return;
+  }
+  var mime = pickMime();
+  stopPlay();
+  setT(0); dir = 1;
+  renderMorph();
+  var stream = out.captureStream(30);
+  try{
+    recorder = new MediaRecorder(stream, mime ? {mimeType:mime, videoBitsPerSecond:8000000} : undefined);
+  }catch(err){
+    setRecStatus("Échec du démarrage de l'enregistrement : " + err.message);
+    return;
+  }
+  chunks = [];
+  recorder.ondataavailable = function(e){ if(e.data && e.data.size > 0) chunks.push(e.data); };
+  recorder.onstop = function(){
+    var type = recorder.mimeType || "video/webm";
+    var blob = new Blob(chunks, {type:type});
+    var url = URL.createObjectURL(blob);
+    var ext = type.indexOf("mp4") >= 0 ? "mp4" : "webm";
+    var name = "morphing-clio." + ext;
+    modalTitle.textContent = "Aperçu de la vidéo — " + name;
+    modalBody.innerHTML = "";
+    var v = document.createElement("video");
+    v.src = url; v.controls = true; v.loop = true; v.autoplay = true;
+    modalBody.appendChild(v);
+    modalDl.href = url;
+    modalDl.download = name;
+    recording = false;
+    btnRec.textContent = "Enregistrer la vidéo";
+    btnRec.classList.remove("active");
+    setRecStatus("");
+    openModal();
+  };
+  recorder.start();
+  recording = true;
+  btnRec.textContent = "Arrêter l'enregistrement";
+  btnRec.classList.add("active");
+  setRecStatus("Enregistrement en cours : un aller-retour complet (12 secondes), puis arrêt automatique.");
+  startPlay();
+  recTimer = setTimeout(stopRecording, 12600);
+});
+
+updateUI();
+renderEditor(0);
+renderEditor(1);
+renderMorph();
+})();
+</script>
+</body>
+</html>
